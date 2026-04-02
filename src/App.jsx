@@ -747,7 +747,7 @@ const TeamsView = ({ teams, setTeams, isAdmin, showToast }) => {
 // ─────────────────────────────────────────────
 const CATEGORIES = ["mental", "physical", "creative", "adventure"];
 const CATEGORY_LABELS = { mental: "Mental", physical: "Físico", creative: "Creativo", adventure: "Aventura" };
-const GAME_ICONS = ["🧠", "🏃", "🎨", "🗺️", "🎤", "🎵", "💦", "🎭", "🎯", "⚽", "🏀", "🎲"];
+const GAME_ICONS = ["🧠", "🏃", "🎨", "🗺️", "🎤", "🎵", "💦", "🎭", "🎯", "⚽", "🏀", "🎲", "🥚", "🐾"];
 
 const GamesView = ({ games, setGames, isAdmin, showToast }) => {
   const [search, setSearch] = useState("");
