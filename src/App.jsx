@@ -271,7 +271,12 @@ const LoginScreen = ({ onLogin }) => {
 
       {/* Logo area */}
       <div className="text-center mb-10 relative z-10">
-        <div className="text-6xl mb-4" style={{ filter: "drop-shadow(0 0 20px rgba(245,158,11,0.3))" }}>🎲</div>
+        <img
+          src="/logo.jpg"
+          alt="Logo"
+          className="w-24 h-24 rounded-2xl object-cover mx-auto mb-4"
+          style={{ filter: "drop-shadow(0 0 20px rgba(245,158,11,0.3))" }}
+        />
         <h1 className="text-4xl md:text-5xl font-black text-white tracking-tight mb-2"
           style={{ fontFamily: "'Fredoka', 'Nunito', sans-serif", textShadow: "0 2px 30px rgba(0,0,0,0.3)" }}>
           Cassarino <span className="text-amber-400">Olimpiadas</span>
@@ -381,7 +386,7 @@ const Sidebar = ({ role, currentView, setCurrentView, onLogout, isOpen, setIsOpe
         style={{ boxShadow: "4px 0 24px rgba(0,0,0,0.04)" }}>
         <div className="p-6 pb-4">
           <div className="flex items-center gap-3">
-            <span className="text-3xl">🎲</span>
+            <img src="/logo.jpg" alt="Logo" className="w-11 h-11 rounded-lg object-cover" />
             <div>
               <h2 className="text-lg font-black text-slate-800 leading-tight" style={{ fontFamily: "'Fredoka', 'Nunito', sans-serif" }}>
                 Cassarino <span className="text-amber-500">Olimpiadas</span>
@@ -1363,7 +1368,7 @@ const AppLayout = ({ role, onLogout }) => {
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="3" x2="21" y1="6" y2="6" /><line x1="3" x2="21" y1="12" y2="12" /><line x1="3" x2="21" y1="18" y2="18" /></svg>
         </button>
         <div className="flex items-center gap-2">
-          <span className="text-xl">🎲</span>
+          <img src="/logo.jpg" alt="Logo" className="w-8 h-8 rounded-md object-cover" />
           <span className="font-black text-slate-800" style={{ fontFamily: "'Fredoka', 'Nunito', sans-serif" }}>
             Cassarino <span className="text-amber-500">Olimpiadas</span>
           </span>
