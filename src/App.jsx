@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 // ─────────────────────────────────────────────
 // MOCK DATA
 // ─────────────────────────────────────────────
-const ADMIN_CREDENTIALS = { username: "admin", password: "familia2024" };
+const ADMIN_CREDENTIALS = { username: "beba", password: "familia2026" };
 
 const initialTeams = [
   { id: 1, name: "Los Relámpagos", color: "#F59E0B", emoji: "⚡", members: ["Papá", "Lucía", "Tomás"], points: 45 },
@@ -144,7 +144,7 @@ const LoginScreen = ({ onLogin }) => {
           style={{ fontFamily: "'Fredoka', 'Nunito', sans-serif", textShadow: "0 2px 30px rgba(0,0,0,0.3)" }}>
           Cassarino <span className="text-amber-400">Olimpeadas</span>
         </h1>
-        <p className="text-slate-400 text-lg font-medium tracking-wide">Agregar texto</p>
+        <p className="text-slate-400 text-lg font-medium tracking-wide">Semana Santa 2026</p>
       </div>
 
       {!showAdminForm ? (
@@ -164,7 +164,6 @@ const LoginScreen = ({ onLogin }) => {
             }}>
             <div className="w-14 h-14 rounded-2xl bg-amber-500/20 flex items-center justify-center text-2xl mb-4 group-hover:scale-110 transition-transform duration-300">🔐</div>
             <h3 className="text-xl font-bold text-white mb-2">Administrador</h3>
-            <p className="text-slate-400 text-sm leading-relaxed">Gestiona equipos, juegos y puntajes de la jornada familiar</p>
           </button>
 
           {/* Guest Card */}
@@ -181,8 +180,7 @@ const LoginScreen = ({ onLogin }) => {
               boxShadow: hoveredCard === "guest" ? "0 20px 60px rgba(59,130,246,0.15)" : "0 4px 20px rgba(0,0,0,0.1)",
             }}>
             <div className="w-14 h-14 rounded-2xl bg-blue-500/20 flex items-center justify-center text-2xl mb-4 group-hover:scale-110 transition-transform duration-300">👀</div>
-            <h3 className="text-xl font-bold text-white mb-2">Invitado</h3>
-            <p className="text-slate-400 text-sm leading-relaxed">Consulta equipos, puntajes y el estado de todos los juegos</p>
+            <h3 className="text-xl font-bold text-white mb-2">Jugador</h3>
           </button>
         </div>
       ) : (
@@ -213,7 +211,6 @@ const LoginScreen = ({ onLogin }) => {
                 className="w-full bg-linear-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white font-bold py-3 rounded-xl transition-all duration-300 shadow-lg shadow-amber-500/25 hover:shadow-amber-500/40 active:scale-[0.98]">
                 Ingresar
               </button>
-              <p className="text-slate-500 text-xs text-center mt-3">Demo: admin / familia2024</p>
             </div>
           </div>
         </div>
@@ -254,7 +251,7 @@ const Sidebar = ({ role, currentView, setCurrentView, onLogout, isOpen, setIsOpe
                 Cassarino <span className="text-amber-500">Olimpeadas</span>
               </h2>
               <span className={`text-[10px] font-bold tracking-widest uppercase ${role === "admin" ? "text-amber-600" : "text-blue-500"}`}>
-                {role === "admin" ? "Administrador" : "Invitado"}
+                {role === "admin" ? "Administrador" : "Jugador"}
               </span>
             </div>
           </div>
