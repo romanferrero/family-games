@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 // ─────────────────────────────────────────────
@@ -38,11 +38,16 @@ const sortById = (a, b) => Number(a.id) - Number(b.id);
 const normalizeTeams = (teams) =>
   teams.map((team) => ({
     ...team,
+    id: Number(team.id),
     members: Array.isArray(team.members) ? team.members : [],
     points: Number(team.points) || 0,
   }));
 
-const normalizeGames = (games) => games.map((game) => ({ ...game }));
+const normalizeGames = (games) =>
+  games.map((game) => ({
+    ...game,
+    id: Number(game.id),
+  }));
 
 const loadStoredState = (key, fallback) => {
   if (typeof window === "undefined") return fallback;
@@ -73,21 +78,32 @@ const loadFromSupabase = async () => {
   };
 };
 
-const syncToSupabase = async (teams, games) => {
+const syncTableById = async (table, rows) => {
   if (!supabase) return;
 
-  await supabase.from("teams").delete().not("id", "is", null);
-  await supabase.from("games").delete().not("id", "is", null);
-
-  if (teams.length > 0) {
-    const { error } = await supabase.from("teams").insert(teams);
+  if (rows.length > 0) {
+    const { error } = await supabase.from(table).upsert(rows, { onConflict: "id" });
     if (error) throw error;
   }
 
-  if (games.length > 0) {
-    const { error } = await supabase.from("games").insert(games);
+  const { data: remoteRows, error: remoteError } = await supabase.from(table).select("id");
+  if (remoteError) throw remoteError;
+
+  const nextIds = new Set(rows.map((row) => Number(row.id)));
+  const staleIds = (remoteRows || [])
+    .map((row) => Number(row.id))
+    .filter((id) => !nextIds.has(id));
+
+  if (staleIds.length > 0) {
+    const { error } = await supabase.from(table).delete().in("id", staleIds);
     if (error) throw error;
   }
+};
+
+const syncToSupabase = async (teams, games) => {
+  if (!supabase) return;
+  await syncTableById("teams", teams);
+  await syncTableById("games", games);
 };
 
 // ─────────────────────────────────────────────
@@ -927,6 +943,8 @@ const AppLayout = ({ role, onLogout }) => {
   const [teams, setTeams] = useState(() => loadStoredState(STORAGE_KEYS.teams, initialTeams));
   const [games, setGames] = useState(() => loadStoredState(STORAGE_KEYS.games, initialGames));
   const [toast, setToast] = useState(null);
+  const [cloudReady, setCloudReady] = useState(!supabase);
+  const syncingRef = useRef(false);
 
   useEffect(() => {
     let ignore = false;
@@ -936,14 +954,12 @@ const AppLayout = ({ role, onLogout }) => {
         const cloudData = await loadFromSupabase();
         if (!cloudData || ignore) return;
 
-        if (cloudData.teams.length > 0) {
-          setTeams(cloudData.teams);
-        }
-        if (cloudData.games.length > 0) {
-          setGames(cloudData.games);
-        }
+        setTeams(cloudData.teams);
+        setGames(cloudData.games);
       } catch {
         // Si Supabase falla, queda funcionando con localStorage.
+      } finally {
+        if (!ignore) setCloudReady(true);
       }
     };
 
@@ -963,22 +979,26 @@ const AppLayout = ({ role, onLogout }) => {
   }, [games]);
 
   useEffect(() => {
-    if (!supabase) return;
+    if (!supabase || !cloudReady || syncingRef.current) return;
 
     const timeoutId = setTimeout(() => {
+      syncingRef.current = true;
       syncToSupabase(teams, games).catch(() => {
         // Fallo de red/permiso: no interrumpe UX local.
+      }).finally(() => {
+        syncingRef.current = false;
       });
     }, 350);
 
     return () => clearTimeout(timeoutId);
-  }, [teams, games]);
+  }, [teams, games, cloudReady]);
 
   useEffect(() => {
-    if (!supabase) return;
+    if (!supabase || !cloudReady) return;
 
     const intervalId = setInterval(async () => {
       try {
+        if (syncingRef.current) return;
         const cloudData = await loadFromSupabase();
         if (!cloudData) return;
 
