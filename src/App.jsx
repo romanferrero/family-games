@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { createClient } from "@supabase/supabase-js";
 
 // ─────────────────────────────────────────────
 // MOCK DATA
@@ -28,6 +29,21 @@ const STORAGE_KEYS = {
   games: "family-games-games",
 };
 
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabase = supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
+
+const sortById = (a, b) => Number(a.id) - Number(b.id);
+
+const normalizeTeams = (teams) =>
+  teams.map((team) => ({
+    ...team,
+    members: Array.isArray(team.members) ? team.members : [],
+    points: Number(team.points) || 0,
+  }));
+
+const normalizeGames = (games) => games.map((game) => ({ ...game }));
+
 const loadStoredState = (key, fallback) => {
   if (typeof window === "undefined") return fallback;
 
@@ -36,6 +52,41 @@ const loadStoredState = (key, fallback) => {
     return stored ? JSON.parse(stored) : fallback;
   } catch {
     return fallback;
+  }
+};
+
+const loadFromSupabase = async () => {
+  if (!supabase) return null;
+
+  const [{ data: teamsData, error: teamsError }, { data: gamesData, error: gamesError }] = await Promise.all([
+    supabase.from("teams").select("*").order("id", { ascending: true }),
+    supabase.from("games").select("*").order("id", { ascending: true }),
+  ]);
+
+  if (teamsError || gamesError) {
+    throw teamsError || gamesError;
+  }
+
+  return {
+    teams: normalizeTeams(teamsData || []),
+    games: normalizeGames(gamesData || []),
+  };
+};
+
+const syncToSupabase = async (teams, games) => {
+  if (!supabase) return;
+
+  await supabase.from("teams").delete().not("id", "is", null);
+  await supabase.from("games").delete().not("id", "is", null);
+
+  if (teams.length > 0) {
+    const { error } = await supabase.from("teams").insert(teams);
+    if (error) throw error;
+  }
+
+  if (games.length > 0) {
+    const { error } = await supabase.from("games").insert(games);
+    if (error) throw error;
   }
 };
 
@@ -142,7 +193,7 @@ const LoginScreen = ({ onLogin }) => {
         <div className="text-6xl mb-4" style={{ filter: "drop-shadow(0 0 20px rgba(245,158,11,0.3))" }}>🎲</div>
         <h1 className="text-4xl md:text-5xl font-black text-white tracking-tight mb-2"
           style={{ fontFamily: "'Fredoka', 'Nunito', sans-serif", textShadow: "0 2px 30px rgba(0,0,0,0.3)" }}>
-          Cassarino <span className="text-amber-400">Olimpeadas</span>
+          Cassarino <span className="text-amber-400">Olimpiadas</span>
         </h1>
         <p className="text-slate-400 text-lg font-medium tracking-wide">Semana Santa 2026</p>
       </div>
@@ -248,7 +299,7 @@ const Sidebar = ({ role, currentView, setCurrentView, onLogout, isOpen, setIsOpe
             <span className="text-3xl">🎲</span>
             <div>
               <h2 className="text-lg font-black text-slate-800 leading-tight" style={{ fontFamily: "'Fredoka', 'Nunito', sans-serif" }}>
-                Cassarino <span className="text-amber-500">Olimpeadas</span>
+                Cassarino <span className="text-amber-500">Olimpiadas</span>
               </h2>
               <span className={`text-[10px] font-bold tracking-widest uppercase ${role === "admin" ? "text-amber-600" : "text-blue-500"}`}>
                 {role === "admin" ? "Administrador" : "Jugador"}
@@ -428,7 +479,10 @@ const TeamsView = ({ teams, setTeams, isAdmin, showToast }) => {
       setTeams((prev) => prev.map((t) => (t.id === editingTeam.id ? { ...t, name: form.name, color: form.color, emoji: form.emoji, members } : t)));
       showToast(`Equipo "${form.name}" actualizado`, "success");
     } else {
-      setTeams((prev) => [...prev, { id: Date.now(), name: form.name, color: form.color, emoji: form.emoji, members, points: 0 }]);
+      setTeams((prev) => {
+        const maxId = prev.reduce((max, t) => Math.max(max, Number(t.id) || 0), 0);
+        return [...prev, { id: maxId + 1, name: form.name, color: form.color, emoji: form.emoji, members, points: 0 }];
+      });
       showToast(`Equipo "${form.name}" creado`, "success");
     }
     setModalOpen(false);
@@ -634,7 +688,10 @@ const GamesView = ({ games, setGames, isAdmin, showToast }) => {
       setGames((prev) => prev.map((g) => (g.id === editingGame.id ? { ...g, ...form } : g)));
       showToast(`Juego "${form.name}" actualizado`, "success");
     } else {
-      setGames((prev) => [...prev, { id: Date.now(), ...form }]);
+      setGames((prev) => {
+        const maxId = prev.reduce((max, g) => Math.max(max, Number(g.id) || 0), 0);
+        return [...prev, { id: maxId + 1, ...form }];
+      });
       showToast(`Juego "${form.name}" creado`, "success");
     }
     setModalOpen(false);
@@ -872,12 +929,71 @@ const AppLayout = ({ role, onLogout }) => {
   const [toast, setToast] = useState(null);
 
   useEffect(() => {
+    let ignore = false;
+
+    const hydrate = async () => {
+      try {
+        const cloudData = await loadFromSupabase();
+        if (!cloudData || ignore) return;
+
+        if (cloudData.teams.length > 0) {
+          setTeams(cloudData.teams);
+        }
+        if (cloudData.games.length > 0) {
+          setGames(cloudData.games);
+        }
+      } catch {
+        // Si Supabase falla, queda funcionando con localStorage.
+      }
+    };
+
+    hydrate();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  useEffect(() => {
     window.localStorage.setItem(STORAGE_KEYS.teams, JSON.stringify(teams));
   }, [teams]);
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEYS.games, JSON.stringify(games));
   }, [games]);
+
+  useEffect(() => {
+    if (!supabase) return;
+
+    const timeoutId = setTimeout(() => {
+      syncToSupabase(teams, games).catch(() => {
+        // Fallo de red/permiso: no interrumpe UX local.
+      });
+    }, 350);
+
+    return () => clearTimeout(timeoutId);
+  }, [teams, games]);
+
+  useEffect(() => {
+    if (!supabase) return;
+
+    const intervalId = setInterval(async () => {
+      try {
+        const cloudData = await loadFromSupabase();
+        if (!cloudData) return;
+
+        const nextTeams = [...cloudData.teams].sort(sortById);
+        const nextGames = [...cloudData.games].sort(sortById);
+
+        setTeams((prev) => (JSON.stringify([...prev].sort(sortById)) === JSON.stringify(nextTeams) ? prev : nextTeams));
+        setGames((prev) => (JSON.stringify([...prev].sort(sortById)) === JSON.stringify(nextGames) ? prev : nextGames));
+      } catch {
+        // Si falla polling, se reintenta en el próximo ciclo.
+      }
+    }, 8000);
+
+    return () => clearInterval(intervalId);
+  }, []);
 
   const showToast = useCallback((message, type = "info") => {
     setToast({ message, type, key: Date.now() });
@@ -908,7 +1024,7 @@ const AppLayout = ({ role, onLogout }) => {
         <div className="flex items-center gap-2">
           <span className="text-xl">🎲</span>
           <span className="font-black text-slate-800" style={{ fontFamily: "'Fredoka', 'Nunito', sans-serif" }}>
-            Cassarino <span className="text-amber-500">Olimpeadas</span>
+            Cassarino <span className="text-amber-500">Olimpiadas</span>
           </span>
         </div>
         <div className="w-10" />
