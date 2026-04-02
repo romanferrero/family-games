@@ -24,11 +24,6 @@ const initialGames = [
   { id: 8, name: "Mímica Express", description: "Actúa la palabra antes de que se acabe el tiempo", status: "pending", category: "creative", icon: "🎭" },
 ];
 
-const STORAGE_KEYS = {
-  teams: "family-games-teams",
-  games: "family-games-games",
-};
-
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const supabase = supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
@@ -49,17 +44,6 @@ const normalizeGames = (games) =>
     id: Number(game.id),
   }));
 
-const loadStoredState = (key, fallback) => {
-  if (typeof window === "undefined") return fallback;
-
-  try {
-    const stored = window.localStorage.getItem(key);
-    return stored ? JSON.parse(stored) : fallback;
-  } catch {
-    return fallback;
-  }
-};
-
 const loadFromSupabase = async () => {
   if (!supabase) return null;
 
@@ -76,6 +60,29 @@ const loadFromSupabase = async () => {
     teams: normalizeTeams(teamsData || []),
     games: normalizeGames(gamesData || []),
   };
+};
+
+const bootstrapSupabase = async () => {
+  if (!supabase) return;
+
+  const [{ count: teamsCount, error: teamsCountError }, { count: gamesCount, error: gamesCountError }] = await Promise.all([
+    supabase.from("teams").select("id", { count: "exact", head: true }),
+    supabase.from("games").select("id", { count: "exact", head: true }),
+  ]);
+
+  if (teamsCountError || gamesCountError) {
+    throw teamsCountError || gamesCountError;
+  }
+
+  if ((teamsCount || 0) === 0) {
+    const { error } = await supabase.from("teams").insert(initialTeams);
+    if (error) throw error;
+  }
+
+  if ((gamesCount || 0) === 0) {
+    const { error } = await supabase.from("games").insert(initialGames);
+    if (error) throw error;
+  }
 };
 
 const syncTableById = async (table, rows) => {
@@ -940,10 +947,11 @@ const RankingView = ({ teams }) => {
 const AppLayout = ({ role, onLogout }) => {
   const [currentView, setCurrentView] = useState(role === "admin" ? "dashboard" : "teams");
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [teams, setTeams] = useState(() => loadStoredState(STORAGE_KEYS.teams, initialTeams));
-  const [games, setGames] = useState(() => loadStoredState(STORAGE_KEYS.games, initialGames));
+  const [teams, setTeams] = useState([]);
+  const [games, setGames] = useState([]);
   const [toast, setToast] = useState(null);
   const [cloudReady, setCloudReady] = useState(!supabase);
+  const [cloudError, setCloudError] = useState("");
   const syncingRef = useRef(false);
 
   useEffect(() => {
@@ -951,13 +959,14 @@ const AppLayout = ({ role, onLogout }) => {
 
     const hydrate = async () => {
       try {
+        await bootstrapSupabase();
         const cloudData = await loadFromSupabase();
         if (!cloudData || ignore) return;
 
         setTeams(cloudData.teams);
         setGames(cloudData.games);
       } catch {
-        // Si Supabase falla, queda funcionando con localStorage.
+        if (!ignore) setCloudError("No se pudo conectar con Supabase.");
       } finally {
         if (!ignore) setCloudReady(true);
       }
@@ -969,14 +978,6 @@ const AppLayout = ({ role, onLogout }) => {
       ignore = true;
     };
   }, []);
-
-  useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEYS.teams, JSON.stringify(teams));
-  }, [teams]);
-
-  useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEYS.games, JSON.stringify(games));
-  }, [games]);
 
   useEffect(() => {
     if (!supabase || !cloudReady || syncingRef.current) return;
@@ -1033,6 +1034,11 @@ const AppLayout = ({ role, onLogout }) => {
 
   return (
     <div className="min-h-screen bg-slate-50/80">
+      {cloudError && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-100 rounded-2xl bg-red-500 text-white px-4 py-2 text-sm font-semibold shadow-lg shadow-red-500/20">
+          {cloudError}
+        </div>
+      )}
       <Sidebar role={role} currentView={currentView} setCurrentView={setCurrentView}
         onLogout={onLogout} isOpen={sidebarOpen} setIsOpen={setSidebarOpen} />
 
@@ -1067,7 +1073,8 @@ const AppLayout = ({ role, onLogout }) => {
 // ─────────────────────────────────────────────
 export default function App() {
   const [auth, setAuth] = useState(null);
-
+  
+  
   return (
     <>
       <style>{`
