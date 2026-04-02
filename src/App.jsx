@@ -24,6 +24,44 @@ const initialGames = [
   { id: 8, name: "Mímica Express", description: "Actúa la palabra antes de que se acabe el tiempo", status: "pending", category: "creative", icon: "🎭" },
 ];
 
+const HARD_CODED_SCORING_RULES = [
+  {
+    id: "carrera-globos",
+    game: "Carrera de globos",
+    icon: "🎈",
+    rule: "1er equipo: 10 puntos · 2do equipo: 5 puntos",
+    maxPoints: 15,
+  },
+  {
+    id: "huevos",
+    game: "Huevos",
+    icon: "🥚",
+    rule: "1er equipo: 10 puntos · 2do equipo: 5 puntos",
+    maxPoints: 15,
+  },
+  {
+    id: "contrareloj",
+    game: "Contrareloj",
+    icon: "⏱️",
+    rule: "Ganador: 15 puntos · 2do equipo: 10 puntos",
+    maxPoints: 25,
+  },
+  {
+    id: "juego-musical",
+    game: "Juego musical",
+    icon: "🎵",
+    rule: "2 puntos por canción adivinada",
+    maxPoints: null,
+  },
+  {
+    id: "desafios",
+    game: "Desafíos",
+    icon: "🎯",
+    rule: "Cada desafío realizado: 25 puntos",
+    maxPoints: 25,
+  },
+];
+
 const initialChallenges = [
   { id: 1, title: "Desafío 1", description: "Carga aquí el primer reto de la jornada", emoji: "🎯", status: "draft" },
   { id: 2, title: "Desafío 2", description: "Carga aquí el segundo reto de la jornada", emoji: "🏁", status: "draft" },
@@ -321,12 +359,14 @@ const Sidebar = ({ role, currentView, setCurrentView, onLogout, isOpen, setIsOpe
     { id: "dashboard", label: "Dashboard", icon: Icons.Home },
     { id: "teams", label: "Equipos", icon: Icons.Users },
     { id: "games", label: "Juegos", icon: Icons.Gamepad },
+    { id: "scores", label: "Puntajes", icon: Icons.Trophy },
     { id: "challenges", label: "Desafíos", icon: Icons.Star },
     { id: "ranking", label: "Ranking", icon: Icons.Trophy },
   ];
   const guestLinks = [
     { id: "teams", label: "Equipos", icon: Icons.Users },
     { id: "games", label: "Juegos", icon: Icons.Gamepad },
+    { id: "scores", label: "Puntajes", icon: Icons.Trophy },
     { id: "challenges", label: "Desafíos", icon: Icons.Star },
     { id: "ranking", label: "Ranking", icon: Icons.Trophy },
   ];
@@ -899,6 +939,51 @@ const GamesView = ({ games, setGames, isAdmin, showToast }) => {
 };
 
 // ─────────────────────────────────────────────
+// SCORES VIEW
+// ─────────────────────────────────────────────
+const ScoresView = () => {
+  const fixedTotal = HARD_CODED_SCORING_RULES
+    .filter((rule) => Number.isFinite(rule.maxPoints))
+    .reduce((sum, rule) => sum + rule.maxPoints, 0);
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-black text-slate-800">Puntajes por Juego</h1>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left min-w-160">
+            <thead className="bg-slate-50 border-b border-slate-100">
+              <tr>
+                <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider text-slate-500">Juego</th>
+                <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider text-slate-500">Posibles puntajes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {HARD_CODED_SCORING_RULES.map((rule) => (
+                <tr key={rule.id} className="border-b last:border-b-0 border-slate-100">
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg">{rule.icon}</span>
+                      <span className="font-semibold text-slate-800 text-sm">{rule.game}</span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-sm text-slate-600">{rule.rule}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────
 // CHALLENGES VIEW
 // ─────────────────────────────────────────────
 const CHALLENGE_ICONS = ["🎯", "🏁", "🔥", "⚡", "🧩", "💥", "🚀", "🏆"];
@@ -1255,6 +1340,7 @@ const AppLayout = ({ role, onLogout }) => {
       case "dashboard": return <AdminDashboard teams={teams} games={games} setCurrentView={setCurrentView} />;
       case "teams": return <TeamsView teams={teams} setTeams={setTeams} isAdmin={isAdmin} showToast={showToast} />;
       case "games": return <GamesView games={games} setGames={setGames} isAdmin={isAdmin} showToast={showToast} />;
+      case "scores": return <ScoresView />;
       case "challenges": return <ChallengesView challenges={challenges} setChallenges={setChallenges} isAdmin={isAdmin} showToast={showToast} />;
       case "ranking": return <RankingView teams={teams} />;
       default: return null;
