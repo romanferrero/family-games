@@ -24,6 +24,11 @@ const initialGames = [
   { id: 8, name: "Mímica Express", description: "Actúa la palabra antes de que se acabe el tiempo", status: "pending", category: "creative", icon: "🎭" },
 ];
 
+const initialChallenges = [
+  { id: 1, title: "Desafío 1", description: "Carga aquí el primer reto de la jornada", emoji: "🎯", status: "draft" },
+  { id: 2, title: "Desafío 2", description: "Carga aquí el segundo reto de la jornada", emoji: "🏁", status: "draft" },
+];
+
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const supabase = supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
@@ -44,34 +49,43 @@ const normalizeGames = (games) =>
     id: Number(game.id),
   }));
 
+const normalizeChallenges = (challenges) =>
+  challenges.map((challenge) => ({
+    ...challenge,
+    id: Number(challenge.id),
+  }));
+
 const loadFromSupabase = async () => {
   if (!supabase) return null;
 
-  const [{ data: teamsData, error: teamsError }, { data: gamesData, error: gamesError }] = await Promise.all([
+  const [{ data: teamsData, error: teamsError }, { data: gamesData, error: gamesError }, { data: challengesData, error: challengesError }] = await Promise.all([
     supabase.from("teams").select("*").order("id", { ascending: true }),
     supabase.from("games").select("*").order("id", { ascending: true }),
+    supabase.from("challenges").select("*").order("id", { ascending: true }),
   ]);
 
-  if (teamsError || gamesError) {
-    throw teamsError || gamesError;
+  if (teamsError || gamesError || challengesError) {
+    throw teamsError || gamesError || challengesError;
   }
 
   return {
     teams: normalizeTeams(teamsData || []),
     games: normalizeGames(gamesData || []),
+    challenges: normalizeChallenges(challengesData || []),
   };
 };
 
 const bootstrapSupabase = async () => {
   if (!supabase) return;
 
-  const [{ count: teamsCount, error: teamsCountError }, { count: gamesCount, error: gamesCountError }] = await Promise.all([
+  const [{ count: teamsCount, error: teamsCountError }, { count: gamesCount, error: gamesCountError }, { count: challengesCount, error: challengesCountError }] = await Promise.all([
     supabase.from("teams").select("id", { count: "exact", head: true }),
     supabase.from("games").select("id", { count: "exact", head: true }),
+    supabase.from("challenges").select("id", { count: "exact", head: true }),
   ]);
 
-  if (teamsCountError || gamesCountError) {
-    throw teamsCountError || gamesCountError;
+  if (teamsCountError || gamesCountError || challengesCountError) {
+    throw teamsCountError || gamesCountError || challengesCountError;
   }
 
   if ((teamsCount || 0) === 0) {
@@ -81,6 +95,11 @@ const bootstrapSupabase = async () => {
 
   if ((gamesCount || 0) === 0) {
     const { error } = await supabase.from("games").insert(initialGames);
+    if (error) throw error;
+  }
+
+  if ((challengesCount || 0) === 0) {
+    const { error } = await supabase.from("challenges").insert(initialChallenges);
     if (error) throw error;
   }
 };
@@ -107,10 +126,11 @@ const syncTableById = async (table, rows) => {
   }
 };
 
-const syncToSupabase = async (teams, games) => {
+const syncToSupabase = async (teams, games, challenges) => {
   if (!supabase) return;
   await syncTableById("teams", teams);
   await syncTableById("games", games);
+  await syncTableById("challenges", challenges);
 };
 
 // ─────────────────────────────────────────────
@@ -301,11 +321,13 @@ const Sidebar = ({ role, currentView, setCurrentView, onLogout, isOpen, setIsOpe
     { id: "dashboard", label: "Dashboard", icon: Icons.Home },
     { id: "teams", label: "Equipos", icon: Icons.Users },
     { id: "games", label: "Juegos", icon: Icons.Gamepad },
+    { id: "challenges", label: "Desafíos", icon: Icons.Star },
     { id: "ranking", label: "Ranking", icon: Icons.Trophy },
   ];
   const guestLinks = [
     { id: "teams", label: "Equipos", icon: Icons.Users },
     { id: "games", label: "Juegos", icon: Icons.Gamepad },
+    { id: "challenges", label: "Desafíos", icon: Icons.Star },
     { id: "ranking", label: "Ranking", icon: Icons.Trophy },
   ];
   const links = role === "admin" ? adminLinks : guestLinks;
@@ -445,6 +467,12 @@ const AdminDashboard = ({ teams, games, setCurrentView }) => {
           <span className="text-2xl mb-3 inline-block group-hover:scale-110 transition-transform">🏆</span>
           <p className="font-bold text-slate-700 text-sm">Ver Ranking</p>
           <p className="text-xs text-slate-400 mt-1">Tabla de posiciones</p>
+        </button>
+        <button onClick={() => setCurrentView("challenges")}
+          className="bg-white border border-slate-200 rounded-2xl p-5 text-left hover:border-rose-300 hover:shadow-md transition-all group">
+          <span className="text-2xl mb-3 inline-block group-hover:scale-110 transition-transform">🎯</span>
+          <p className="font-bold text-slate-700 text-sm">Desafíos</p>
+          <p className="text-xs text-slate-400 mt-1">Publicar retos de la jornada</p>
         </button>
       </div>
 
@@ -871,6 +899,201 @@ const GamesView = ({ games, setGames, isAdmin, showToast }) => {
 };
 
 // ─────────────────────────────────────────────
+// CHALLENGES VIEW
+// ─────────────────────────────────────────────
+const CHALLENGE_ICONS = ["🎯", "🏁", "🔥", "⚡", "🧩", "💥", "🚀", "🏆"];
+
+const ChallengesView = ({ challenges, setChallenges, isAdmin, showToast }) => {
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingChallenge, setEditingChallenge] = useState(null);
+  const [form, setForm] = useState({ title: "", description: "", emoji: "🎯", status: "draft" });
+
+  const visibleChallenges = challenges.filter((challenge) => challenge.status === "active");
+
+  const openEdit = (challenge) => {
+    setEditingChallenge(challenge);
+    setForm({
+      title: challenge.title,
+      description: challenge.description,
+      emoji: challenge.emoji,
+      status: challenge.status,
+    });
+    setModalOpen(true);
+  };
+
+  const openCreate = (slotChallenge) => {
+    setEditingChallenge(slotChallenge);
+    setForm({
+      title: slotChallenge.title,
+      description: slotChallenge.description,
+      emoji: slotChallenge.emoji,
+      status: slotChallenge.status,
+    });
+    setModalOpen(true);
+  };
+
+  const handleSave = () => {
+    if (!editingChallenge) return;
+    if (!form.title.trim()) return;
+
+    setChallenges((prev) => prev.map((challenge) => (challenge.id === editingChallenge.id ? { ...challenge, ...form } : challenge)));
+    showToast(`Desafío "${form.title}" guardado`, "success");
+    setModalOpen(false);
+  };
+
+  const toggleStatus = (challenge) => {
+    const nextStatus = challenge.status === "active" ? "draft" : "active";
+    setChallenges((prev) => prev.map((item) => (item.id === challenge.id ? { ...item, status: nextStatus } : item)));
+    showToast(`Desafío ${nextStatus === "active" ? "publicado" : "ocultado"}`, "success");
+  };
+
+  const openFirstEditable = () => {
+    const target = challenges.find((challenge) => challenge.status === "draft") || challenges[0];
+    if (!target) return;
+    openEdit(target);
+  };
+
+  const initializeChallenges = () => {
+    if (challenges.length > 0) return;
+    setChallenges(initialChallenges);
+    showToast("Se crearon los 2 desafíos base", "success");
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-black text-slate-800">Desafíos</h1>
+        </div>
+        {isAdmin && (
+          <div className="flex items-center gap-2">
+            <p className="text-xs font-semibold text-rose-500 bg-rose-50 border border-rose-100 rounded-xl px-3 py-2">
+              Solo hay 2 espacios activos
+            </p>
+            <button
+              onClick={openFirstEditable}
+              disabled={challenges.length === 0}
+              className="bg-rose-500 hover:bg-rose-400 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-colors shadow-sm whitespace-nowrap"
+            >
+              Cargar/Editar
+            </button>
+          </div>
+        )}
+      </div>
+
+      {isAdmin && challenges.length === 0 && (
+        <div className="bg-white rounded-2xl border border-slate-100 p-6 shadow-sm text-center">
+          <p className="text-slate-500 text-sm mb-4">No hay desafíos cargados todavía.</p>
+          <button
+            onClick={initializeChallenges}
+            className="bg-rose-500 hover:bg-rose-400 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-colors shadow-sm"
+          >
+            Crear 2 desafíos base
+          </button>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {(isAdmin ? challenges : visibleChallenges).map((challenge, index) => (
+          <div key={challenge.id} className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm hover:shadow-md transition-all">
+            <div className="p-5">
+              <div className="flex items-start justify-between mb-4">
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl bg-rose-50">
+                  {challenge.emoji}
+                </div>
+                <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider ${challenge.status === "active" ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-500"}`}>
+                  {challenge.status === "active" ? "Publicado" : "Borrador"}
+                </span>
+              </div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-rose-500 mb-2">Desafío {index + 1}</p>
+              <h3 className="font-bold text-slate-800 mb-2">{challenge.title}</h3>
+              <p className="text-sm text-slate-500 leading-relaxed">{challenge.description}</p>
+            </div>
+
+            {isAdmin && (
+              <div className="flex border-t border-slate-100">
+                <button onClick={() => openEdit(challenge)} className="flex-1 flex items-center justify-center gap-2 py-3 text-xs font-semibold text-slate-400 hover:bg-slate-50 hover:text-blue-500 transition-all">
+                  <Icons.Edit /> Editar
+                </button>
+                <button onClick={() => toggleStatus(challenge)} className="flex-1 flex items-center justify-center gap-2 py-3 text-xs font-semibold text-slate-400 hover:bg-slate-50 hover:text-emerald-500 transition-all border-l border-slate-100">
+                  {challenge.status === "active" ? <><Icons.Clock /> Ocultar</> : <><Icons.Check /> Publicar</>}
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {isAdmin && challenges.some((challenge) => challenge.status === "draft") && (
+        <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm">
+          <h3 className="font-bold text-slate-800 mb-3">Espacios de carga</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {challenges.filter((challenge) => challenge.status === "draft").map((challenge) => (
+              <button key={challenge.id} onClick={() => openCreate(challenge)} className="rounded-2xl border border-dashed border-slate-200 p-5 text-left hover:border-rose-300 hover:bg-rose-50/40 transition-all">
+                <div className="flex items-center gap-3 mb-2">
+                  <span className="text-2xl">{challenge.emoji}</span>
+                  <div>
+                    <p className="font-bold text-slate-700">{challenge.title}</p>
+                    <p className="text-xs text-slate-400">Configurar contenido</p>
+                  </div>
+                </div>
+                <p className="text-sm text-slate-500 leading-relaxed max-h-12 overflow-hidden">{challenge.description}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!isAdmin && visibleChallenges.length === 0 && (
+        <div className="text-center py-16">
+          <p className="text-4xl mb-3">🎯</p>
+          <p className="text-slate-400 font-medium">Aún no hay desafíos publicados</p>
+        </div>
+      )}
+
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editingChallenge ? "Editar Desafío" : "Nuevo Desafío"}>
+        <div className="space-y-4">
+          <div>
+            <label className="text-sm font-semibold text-slate-600 block mb-1.5">Título</label>
+            <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-100" />
+          </div>
+          <div>
+            <label className="text-sm font-semibold text-slate-600 block mb-1.5">Descripción</label>
+            <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={4} className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-100 resize-none" />
+          </div>
+          <div>
+            <label className="text-sm font-semibold text-slate-600 block mb-1.5">Emoji</label>
+            <div className="flex flex-wrap gap-2">
+              {CHALLENGE_ICONS.map((emoji) => (
+                <button key={emoji} onClick={() => setForm({ ...form, emoji })} className={`w-10 h-10 rounded-xl text-xl flex items-center justify-center border-2 transition-all ${form.emoji === emoji ? "border-rose-400 bg-rose-50 scale-110" : "border-slate-100 hover:border-slate-300"}`}>
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="text-sm font-semibold text-slate-600 block mb-1.5">Estado</label>
+            <div className="flex gap-2">
+              {[
+                { id: "draft", label: "Borrador" },
+                { id: "active", label: "Publicado" },
+              ].map((option) => (
+                <button key={option.id} onClick={() => setForm({ ...form, status: option.id })} className={`flex-1 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${form.status === option.id ? "bg-rose-500 text-white" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}>
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <button onClick={handleSave} className="w-full bg-rose-500 hover:bg-rose-400 text-white font-bold py-3 rounded-xl transition-colors mt-2 shadow-sm">
+            Guardar Desafío
+          </button>
+        </div>
+      </Modal>
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────
 // RANKING VIEW
 // ─────────────────────────────────────────────
 const RankingView = ({ teams }) => {
@@ -945,6 +1168,7 @@ const AppLayout = ({ role, onLogout }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [teams, setTeams] = useState([]);
   const [games, setGames] = useState([]);
+  const [challenges, setChallenges] = useState([]);
   const [toast, setToast] = useState(null);
   const [cloudReady, setCloudReady] = useState(!supabase);
   const [cloudError, setCloudError] = useState("");
@@ -961,6 +1185,7 @@ const AppLayout = ({ role, onLogout }) => {
 
         setTeams(cloudData.teams);
         setGames(cloudData.games);
+        setChallenges(cloudData.challenges);
       } catch {
         if (!ignore) setCloudError("No se pudo conectar con Supabase.");
       } finally {
@@ -980,13 +1205,11 @@ const AppLayout = ({ role, onLogout }) => {
 
     const timeoutId = setTimeout(() => {
       syncingRef.current = true;
-      syncToSupabase(teams, games)
+      syncToSupabase(teams, games, challenges)
         .then(() => {
           setCloudError("");
-          console.log("✅ Sync OK");
         })
         .catch((error) => {
-          console.error("❌ Error sincronizando con Supabase:", error);
           setCloudError(error?.message || "Error guardando en Supabase");
         })
         .finally(() => {
@@ -995,11 +1218,7 @@ const AppLayout = ({ role, onLogout }) => {
     }, 350);
 
     return () => clearTimeout(timeoutId);
-  }, [teams, games, cloudReady]);
-
-  console.log("SUPABASE URL:", import.meta.env.VITE_SUPABASE_URL);
-  console.log("SUPABASE KEY:", import.meta.env.VITE_SUPABASE_ANON_KEY ? "OK" : "FALTA");
-  console.log("SUPABASE CLIENT:", supabase);
+  }, [teams, games, challenges, cloudReady]);
 
   useEffect(() => {
     if (!supabase || !cloudReady) return;
@@ -1012,9 +1231,11 @@ const AppLayout = ({ role, onLogout }) => {
 
         const nextTeams = [...cloudData.teams].sort(sortById);
         const nextGames = [...cloudData.games].sort(sortById);
+        const nextChallenges = [...cloudData.challenges].sort(sortById);
 
         setTeams((prev) => (JSON.stringify([...prev].sort(sortById)) === JSON.stringify(nextTeams) ? prev : nextTeams));
         setGames((prev) => (JSON.stringify([...prev].sort(sortById)) === JSON.stringify(nextGames) ? prev : nextGames));
+        setChallenges((prev) => (JSON.stringify([...prev].sort(sortById)) === JSON.stringify(nextChallenges) ? prev : nextChallenges));
       } catch {
         // Si falla polling, se reintenta en el próximo ciclo.
       }
@@ -1034,6 +1255,7 @@ const AppLayout = ({ role, onLogout }) => {
       case "dashboard": return <AdminDashboard teams={teams} games={games} setCurrentView={setCurrentView} />;
       case "teams": return <TeamsView teams={teams} setTeams={setTeams} isAdmin={isAdmin} showToast={showToast} />;
       case "games": return <GamesView games={games} setGames={setGames} isAdmin={isAdmin} showToast={showToast} />;
+      case "challenges": return <ChallengesView challenges={challenges} setChallenges={setChallenges} isAdmin={isAdmin} showToast={showToast} />;
       case "ranking": return <RankingView teams={teams} />;
       default: return null;
     }
