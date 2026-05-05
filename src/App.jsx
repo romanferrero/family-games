@@ -4,7 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 // ─────────────────────────────────────────────
 // MOCK DATA
 // ─────────────────────────────────────────────
-const ADMIN_CREDENTIALS = { username: "beba", password: "familia2026" };
+const ADMIN_CREDENTIALS = { username: "admin", password: "admin2026" };
 
 const initialTeams = [
   { id: 1, name: "Los Relámpagos", color: "#F59E0B", emoji: "⚡", members: ["Papá", "Lucía", "Tomás"], points: 45 },
@@ -279,9 +279,9 @@ const LoginScreen = ({ onLogin }) => {
         />
         <h1 className="text-4xl md:text-5xl font-black text-white tracking-tight mb-2"
           style={{ fontFamily: "'Fredoka', 'Nunito', sans-serif", textShadow: "0 2px 30px rgba(0,0,0,0.3)" }}>
-          Cassarino <span className="text-amber-400">Olimpiadas</span>
+          Olimpiadas <span className="text-amber-400">Familiares</span>
         </h1>
-        <p className="text-slate-400 text-lg font-medium tracking-wide">Semana Santa 2026</p>
+        <p className="text-slate-400 text-lg font-medium tracking-wide">2026</p>
       </div>
 
       {!showAdminForm ? (
@@ -389,7 +389,7 @@ const Sidebar = ({ role, currentView, setCurrentView, onLogout, isOpen, setIsOpe
             <img src="/logo.jpg" alt="Logo" className="w-11 h-11 rounded-lg object-cover" />
             <div>
               <h2 className="text-lg font-black text-slate-800 leading-tight" style={{ fontFamily: "'Fredoka', 'Nunito', sans-serif" }}>
-                Cassarino <span className="text-amber-500">Olimpiadas</span>
+                Olimpiadas <span className="text-amber-500">Familiares</span>
               </h2>
               <span className={`text-[10px] font-bold tracking-widest uppercase ${role === "admin" ? "text-amber-600" : "text-blue-500"}`}>
                 {role === "admin" ? "Administrador" : "Jugador"}
@@ -1370,7 +1370,7 @@ const AppLayout = ({ role, onLogout }) => {
         <div className="flex items-center gap-2">
           <img src="/logo.jpg" alt="Logo" className="w-8 h-8 rounded-md object-cover" />
           <span className="font-black text-slate-800" style={{ fontFamily: "'Fredoka', 'Nunito', sans-serif" }}>
-            Cassarino <span className="text-amber-500">Olimpiadas</span>
+            Olimpiadas <span className="text-amber-500">Familiares</span>
           </span>
         </div>
         <div className="w-10" />
